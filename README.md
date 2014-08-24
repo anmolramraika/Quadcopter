@@ -1,1 +1,1 @@
-Quadcopter running on ARduino with MPU-6050 as pimary sensor
+Quadcopter running on Arduino with MPU-6050 as pimary sensor

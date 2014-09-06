@@ -3,7 +3,7 @@
 #include <Servo.h> 
 #include "MPU6050_6Axis_MotionApps20.h"
 #include "Wire.h"
-
+#include <PID_v1.h>
 
 // class default I2C address is 0x68
 // specific I2C addresses may be passed as a parameter here
@@ -90,17 +90,25 @@ void dmpDataReady() {
     mpuInterrupt = true;
 }
 
+//***SERVO and PID CLASS DECLARATION***
+
 //Servo class declaration
 Servo mot1;
 Servo mot2;
 Servo mot3;
 Servo mot4;
-unsigned int s1 = 120,s2=120,s3=120,s4=120;
+unsigned int s1 = 120,s2 = 120,s3 = 120,s4 = 120;
+double out1,out2,out3,set1,set2,set3,inp1,inp2,inp3;
+//PID class declaration
+PID yawReg(&inp3, &out3, &set3, 2.0, 5.0, 1.0, DIRECT);
+PID pitchReg(&inp1, &out1, &set2, 0.5, 0.0, 1.0, REVERSE);
+PID rollReg(&inp2, &out2, &set1, 2.0, 5.0, 1.0, REVERSE);
 
 //***INITIAL SETUP***
-
+unsigned long timer=0;
+int check=0;
 void setup() {
-
+    set1=0;set2=0;set3=140;
     // join I2C bus (I2Cdev library doesn't do this automatically)
     #if I2CDEV_IMPLEMENTATION == I2CDEV_ARDUINO_WIRE
         Wire.begin();
@@ -169,7 +177,11 @@ void setup() {
         Serial.println(F(")"));
     }
 
+    timer=millis();
     pinMode(LED_PIN, OUTPUT);
+    yawReg.SetMode(AUTOMATIC);
+    rollReg.SetMode(AUTOMATIC);
+    pitchReg.SetMode(AUTOMATIC);
 }
 
 //MAIN PROGRAM LOOP***
@@ -229,9 +241,15 @@ void loop() {
             Serial.print(ypr[1] * 180/M_PI);
             Serial.print("\t");
             Serial.println(ypr[2] * 180/M_PI);
-            
+            check++;
             //NEW CODE
-            motor_control();
+            if((millis()-timer)>10000 && check==50){
+              inp1=ypr[1];inp2=ypr[2];inp3=ypr[0];
+              rollReg.Compute();
+              pitchReg.Compute();
+              yawReg.Compute();
+              check=0;
+              motor_control();}
             
         #endif
 
@@ -258,28 +276,36 @@ void motor_arm(){
 }
 
 void motor_control(){
-  if(speed1>30 && speed1<180){
-    speed1=speed1+ypr[1] * 10/M_PI;
+  if(out1>0){
+    s1=s1+out1;
+    s3=s3-out1;
   }
-  else speed1=120;
-  if(speed3>30 && speed3<180){ 
-    speed3=speed3-ypr[1] * 10/M_PI;
+  else
+  {
+    s1=s1-out1;
+    s3=s3+out1;
   }
-  else speed3 = 120;
-  if(speed2>30 && speed2<180){
-    speed2=speed2+ypr[2] * 10/M_PI;
+  if(out2>0){
+    s2=s2+out2;
+    s4=s4-out2;
   }
-  else speed2 = 120;
-  if(speed4>30 && speed4<180){ 
-    speed4=speed4-ypr[2] * 10/M_PI;
+  else
+  {
+    s2=s2-out2;
+    s4=s4+out2;
   }
-  else speed4 = 120;
-  mot1.write(speed1);
-  mot2.write(speed2);
-  mot3.write(speed3);
-  mot4.write(speed4);
-  Serial.println(speed1);
-  Serial.println(speed2);
-  Serial.println(speed3);
-  Serial.println(speed4);
+  mot1.write(s1);
+  mot2.write(s2);
+  mot3.write(s3);
+  mot4.write(s4);
+  Serial.print(out1);
+  Serial.print("\t");
+  Serial.println(out2);
+  Serial.print(s1);
+  Serial.print("\t");
+  Serial.print(s2);
+  Serial.print("\t");
+  Serial.print(s3);
+  Serial.print("\t");
+  Serial.println(s4);
 }

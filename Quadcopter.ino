@@ -9,54 +9,22 @@
 // specific I2C addresses may be passed as a parameter here
 // AD0 low = 0x68 (default for SparkFun breakout and InvenSense evaluation board)
 // AD0 high = 0x69
-MPU6050 mpu;
 //MPU6050 mpu(0x69); // <-- use for AD0 high
+MPU6050 mpu;
 
-/* =========================================================================
-   NOTE: In addition to connection 3.3v, GND, SDA, and SCL, this sketch
-   depends on the MPU-6050's INT pin being connected to the Arduino's
-   external interrupt #0 pin. On the Arduino Uno and Mega 2560, this is
-   digital I/O pin 2.
- * ========================================================================= */
-
-// uncomment "OUTPUT_READABLE_QUATERNION" if you want to see the actual
-// quaternion components in a [w, x, y, z] format (not best for parsing
-// on a remote host such as Processing or something though)
+// uncomment "OUTPUT_READABLE_QUATERNION" if you want to see the actual quaternion components in a [w, x, y, z] 
 //#define OUTPUT_READABLE_QUATERNION
 
-// uncomment "OUTPUT_READABLE_EULER" if you want to see Euler angles
-// (in degrees) calculated from the quaternions coming from the FIFO.
-// Note that Euler angles suffer from gimbal lock (for more info, see
-// http://en.wikipedia.org/wiki/Gimbal_lock)
-//#define OUTPUT_READABLE_EULER
-
-// uncomment "OUTPUT_READABLE_YAWPITCHROLL" if you want to see the yaw/
-// pitch/roll angles (in degrees) calculated from the quaternions coming
-// from the FIFO. Note this also requires gravity vector calculations.
-// Also note that yaw/pitch/roll angles suffer from gimbal lock (for
-// more info, see: http://en.wikipedia.org/wiki/Gimbal_lock)
+// uncomment "OUTPUT_READABLE_YAWPITCHROLL" 
 #define OUTPUT_READABLE_YAWPITCHROLL
-
-// uncomment "OUTPUT_READABLE_REALACCEL" if you want to see acceleration
-// components with gravity removed. This acceleration reference frame is
-// not compensated for orientation, so +X is always +X according to the
-// sensor, just without the effects of gravity. If you want acceleration
-// compensated for orientation, us OUTPUT_READABLE_WORLDACCEL instead.
-//#define OUTPUT_READABLE_REALACCEL
 
 // uncomment "OUTPUT_READABLE_WORLDACCEL" if you want to see acceleration
 // components with gravity removed and adjusted for the world frame of
 // reference (yaw is relative to initial orientation, since no magnetometer
-// is present in this case). Could be quite handy in some cases.
+// is present in this case).
 //#define OUTPUT_READABLE_WORLDACCEL
 
-// uncomment "OUTPUT_TEAPOT" if you want output that matches the
-// format used for the InvenSense teapot demo
-//#define OUTPUT_TEAPOT
-
-
-
-#define LED_PIN 13 // (Arduino is 13, Teensy is 11, Teensy++ is 6)
+#define LED_PIN 13 
 bool blinkState = false;
 
 // MPU control/status vars
@@ -69,47 +37,37 @@ uint8_t fifoBuffer[64]; // FIFO storage buffer
 
 // orientation/motion vars
 Quaternion q;           // [w, x, y, z]         quaternion container
-VectorInt16 aa;         // [x, y, z]            accel sensor measurements
-VectorInt16 aaReal;     // [x, y, z]            gravity-free accel sensor measurements
-VectorInt16 aaWorld;    // [x, y, z]            world-frame accel sensor measurements
+//VectorInt16 aa;         // [x, y, z]            accel sensor measurements
+//VectorInt16 aaReal;     // [x, y, z]            gravity-free accel sensor measurements
+//VectorInt16 aaWorld;    // [x, y, z]            world-frame accel sensor measurements
 VectorFloat gravity;    // [x, y, z]            gravity vector
-float euler[3];         // [psi, theta, phi]    Euler angle container
+//float euler[3];         // [psi, theta, phi]    Euler angle container
 float ypr[3];           // [yaw, pitch, roll]   yaw/pitch/roll container and gravity vector
-
-// packet structure for InvenSense teapot demo
-uint8_t teapotPacket[14] = { '$', 0x02, 0,0, 0,0, 0,0, 0,0, 0x00, 0x00, '\r', '\n' };
-
-
 
 
 //***INTERRUPT DETECTION ROUTINE***
-
-
 volatile bool mpuInterrupt = false;     // indicates whether MPU interrupt pin has gone high
 void dmpDataReady() {
     mpuInterrupt = true;
 }
 
 //***SERVO and PID CLASS DECLARATION***
-
-//Servo class declaration
 Servo mot1;
 Servo mot2;
 Servo mot3;
 Servo mot4;
-unsigned int s1 = 120,s2 = 120,s3 = 120,s4 = 120;
+byte s1,s2,s3,s4;
 double out1,out2,out3,set1,set2,set3,inp1,inp2,inp3;
-//PID class declaration
-PID yawReg(&inp3, &out3, &set3, 2.0, 5.0, 1.0, DIRECT);
-PID pitchReg(&inp1, &out1, &set2, 0.5, 0.0, 1.0, REVERSE);
-PID rollReg(&inp2, &out2, &set1, 2.0, 5.0, 1.0, REVERSE);
-
-//***INITIAL SETUP***
+bool flag=true;
 unsigned long timer=0;
-int check=0;
+unsigned int check=0;
+//PID class declaration
+PID pitchReg(&inp1, &out1, &set1, 5.0, 0, 0, REVERSE);
+PID rollReg(&inp2, &out2, &set2, 5.0, 0, 0, REVERSE);
+PID yawReg(&inp3, &out3, &set3, 5.0, 0, 0, DIRECT);
+
+
 void setup() {
-    set1=0;set2=0;set3=140;
-    // join I2C bus (I2Cdev library doesn't do this automatically)
     #if I2CDEV_IMPLEMENTATION == I2CDEV_ARDUINO_WIRE
         Wire.begin();
         TWBR = 24; // 400kHz I2C clock (200kHz if CPU is 8MHz)
@@ -119,13 +77,15 @@ void setup() {
     Serial.begin(115200);
     while(!Serial.available()){
     }
-    mot1.attach(3);
-    mot2.attach(5);
-    mot3.attach(6);
-    mot4.attach(9);
-    delay(100);
+    motor_init();
     motor_arm();
-
+    for(int i=0;i<=40;i++){
+    mot1.write(i);
+    mot2.write(i);
+    mot3.write(i);
+    mot4.write(i);
+    }
+    
     // initialize device
     Serial.println(F("Initializing I2C devices..."));
     mpu.initialize();
@@ -176,15 +136,16 @@ void setup() {
         Serial.print(devStatus);
         Serial.println(F(")"));
     }
-
     timer=millis();
     pinMode(LED_PIN, OUTPUT);
-    yawReg.SetMode(AUTOMATIC);
-    rollReg.SetMode(AUTOMATIC);
     pitchReg.SetMode(AUTOMATIC);
+    pitchReg.SetOutputLimits(-20, 20); 
+    rollReg.SetMode(AUTOMATIC);
+    rollReg.SetOutputLimits(-20, 20);
+    yawReg.SetMode(AUTOMATIC);
+    yawReg.SetOutputLimits(-20, 20);
 }
 
-//MAIN PROGRAM LOOP***
 
 void loop() {
     // if programming failed, don't try to do anything
@@ -192,16 +153,6 @@ void loop() {
 
     // wait for MPU interrupt or extra packet(s) available
     while (!mpuInterrupt && fifoCount < packetSize) {
-        // other program behavior stuff here
-        // .
-        // .
-        // .
-        // if you are really paranoid you can frequently test in between other
-        // stuff to see if mpuInterrupt is true, and if so, "break;" from the
-        // while() loop to immediately process the MPU data
-        // .
-        // .
-        // .
     }
 
     // reset interrupt flag and get INT_STATUS byte
@@ -235,29 +186,34 @@ void loop() {
             mpu.dmpGetQuaternion(&q, fifoBuffer);
             mpu.dmpGetGravity(&gravity, &q);
             mpu.dmpGetYawPitchRoll(ypr, &q, &gravity);
-            Serial.print("ypr\t");
+            /*Serial.print("ypr\t");
             Serial.print(ypr[0] * 180/M_PI);
             Serial.print("\t");
             Serial.print(ypr[1] * 180/M_PI);
             Serial.print("\t");
-            Serial.println(ypr[2] * 180/M_PI);
-            check++;
-            //NEW CODE
-            if((millis()-timer)>10000 && check==50){
-              inp1=ypr[1];inp2=ypr[2];inp3=ypr[0];
-              rollReg.Compute();
-              pitchReg.Compute();
-              yawReg.Compute();
-              check=0;
-              motor_control();}
+            Serial.println(ypr[2] * 180/M_PI);*/
+         #endif
             
-        #endif
+            //NEW CODE
+            if(flag){
+              if(millis()-timer>20000)
+              {
+                motor_init_run();  
+              }
+            }
+            else if(!flag){
+              check++;
+              if(check>=20){
+                compute_results();
+                check=0;
+                motor_control();
+              }
+            }
 
-        
         // blink LED to indicate activity
         blinkState = !blinkState;
         digitalWrite(LED_PIN, blinkState);
-        delay(200);
+        //delay(200);//Maybe this ws useful in not letting mpu stop. Test this.
     }
 }
 
@@ -267,33 +223,13 @@ void motor_arm(){
   mot3.write(0);
   mot4.write(0);
   delay(5000);
-  for(int i=0;i<=120;i++){
-    mot1.write(i);
-    mot2.write(i);
-    mot3.write(i);
-    mot4.write(i);
-  }
 }
 
 void motor_control(){
-  if(out1>0){
-    s1=s1+out1;
-    s3=s3-out1;
-  }
-  else
-  {
-    s1=s1-out1;
-    s3=s3+out1;
-  }
-  if(out2>0){
-    s2=s2+out2;
-    s4=s4-out2;
-  }
-  else
-  {
-    s2=s2-out2;
-    s4=s4+out2;
-  }
+    s1=100+12*out1;
+    s3=100-12*out1;
+    s2=100-12*out2;
+    s4=100+12*out2;
   mot1.write(s1);
   mot2.write(s2);
   mot3.write(s3);
@@ -308,4 +244,31 @@ void motor_control(){
   Serial.print(s3);
   Serial.print("\t");
   Serial.println(s4);
+}
+
+void motor_init(){
+  mot1.attach(3);
+  mot2.attach(5);
+  mot3.attach(6);
+  mot4.attach(9);
+  delay(100);
+}
+
+void motor_init_run(){
+  for(int i=40;i<=100;i++){
+    mot1.write(i);
+    mot2.write(i);
+    mot3.write(i);
+    mot4.write(i);
+    }
+  s1=100;s2=100;s3=100;s4=100;//Speed setting
+  set1=ypr[1];set2=ypr[2];set3=ypr[0];//Value setting for PID
+  flag=false;
+}
+
+void compute_results(){
+  inp1=ypr[1];inp2=ypr[2];inp3=ypr[0];
+  rollReg.Compute();
+  pitchReg.Compute();
+  yawReg.Compute();
 }
